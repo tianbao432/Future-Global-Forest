@@ -1,0 +1,276 @@
+!///////////////////////////////////////////////////////////////////////////////////////
+! NFI initialisation 
+!///////////////////////////////////////////////////////////////////////////////////////
+param "file_lu"        (str "/home/tianbao/run_LPJ_GUESS/AGE_IN/inputs/forest_landcover_1700_2100_15groups.txt")
+param "file_luforest"  (str "/home/tianbao/run_LPJ_GUESS/AGE_IN/inputs/ForestST_agegroups_1700_2100_15.txt")
+
+! Optional wet-day keys for the CF input module.
+! Daily precipitation remains in file_prec; verify empty-file behavior.
+param "file_wetdays" (str "")
+param "variable_wetdays" (str "")
+
+param "file_woodharv_prescribed_intens_BL" (str "")
+param "file_woodharv_prescribed_intens_NL" (str "")
+param "file_woodharv_prescribed_size_preference_BL" (str "")
+param "file_woodharv_prescribed_size_preference_NL" (str "")
+param "file_tree2globe_para" (str "")
+
+! burned_area_model "SIMFIRE_GLOBAL"	! SIMFIRE_GLOBAL, SIMFIRE_EUROPE  ! use global.ins: burned_area_model "SIMFIRE_GLOBAL"
+! npatch_secondarystand 1			! Number of replicate patches to simulate in secondary stands with option forest_init_poolsoil  ! superseded by npatch_secondarystand 5
+npatch_disturbedstand 1			! Number of replicate patches to simulate in secondary stands created by prescribed disturbance
+npatch_treeinit 1			! Number of patches simulated in stands created at whole tree initialisation
+reduce_all_stands 0			! Whether to reduce equal percentage of all stands of a stand type at land cover change
+age_limit_reduce 15			! Minimum age of stands to reduce at land cover change
+
+!///////////////////////////////////////////////////////////////////////////////////////
+! Setting some flags 
+!///////////////////////////////////////////////////////////////////////////////////////
+! estinterval 1			 ! Years between establishment events in cohort mode  ! use global.ins: estinterval 5
+! npatch 5			     ! Number of replicate patches to simulate  ! use global.ins: npatch 15
+npatch_secondarystand 5 ! MMY Number of replicate patches to simulate in secondary stand. Patch number in FOREST stand created from bare ground (type: int, default: 1)
+! ifnewalloc 1			 ! Whether to use the new allocation calculations (1), or the original (0)  ! use global.ins: ifnewalloc 1
+!coordinates_precision 3 ! Needed for site simulations
+
+!///////////////////////////////////////////////////////////////////////////////////////
+! SERIALIZATION SETTINGS
+!///////////////////////////////////////////////////////////////////////////////////////
+! restart 0                               ! Whether to start from a state file  ! use global.ins: restart 0
+! restart_year 399                ! Year to start state file (no setting = after spinup)
+! restart_path "./restarts" ! Directory to put state files in
+
+! save_state 0                         ! Whether to save a state file  ! use global.ins: save_state 0
+! save_year 399   		         ! Save the state for the year before restart year (here save_year = restart_year, in fact it should equal to restart_year - 1, no setting = after spinup)
+! save_path "./restarts"    ! Directory to put state files in
+
+!///////////////////////////////////////////////////////////////////////////////
+! Management types
+!///////////////////////////////////////////////////////////////////////////////
+group "mt_man" (
+    relaxed_establishment 1 ! MMY Whether to ignore climate establishment limits at planting (type: bool, default: 0)
+    suppress_fire 0         ! MMY Whether to suppress fires
+    suppress_disturbance 0  ! MMY Whether to suppress disturbances
+    stochmort 1		        ! MMY Whether to use stochastic mortality									 	;  NDRAT TILL 1 240625 !
+    stochestab 1			! MMY Whether to use stochastic establishment 
+    killgrass_at_cc 1		! MMY Whether to kill grass at clearcut 
+    ! MMY@20Apr2026, comment out firstmanageyear to stop using management
+    firstmanageyear 1701	! MMY First calender year of management, calendar year when management starts (including suppression of disturbance and fire)
+                            ! Must be set if management starts before first historic year (first climate year in trunk code version)
+    ! ifclearcut_by_density 1
+    ! MMY@20Apr2026, set ifthin_reineke 0 to avoid using Reineke's management	 
+)
+
+mt "MT1" (
+    mt_man
+    ifthin_reineke 1 	    ! MMY Whether to use Reineke's rule-based automatic thinning ! No effect unless harvest_system is "clearcut"				! Sim. 3 & 7
+    ! delayduecutting 10
+    ! rotation_wait_for_cc 1
+    firstclearcutyear 2200      ! MMY change from 2011 to 2006 for 2005 init ! First calender year of clearcut
+    harvest_system "" !"probability_input" !  "clearcut" 
+    ! MMY@20Apr2026, Stefan also doesn't know what SELECTION here means. Mats cannot remember what planting_system means neither, but he thinks this one is harmless when to turn on.
+    planting_system ""          ! MMY Planting system of management 1, rules for which pfts are planted
+    reestab "all"        ! MMY@20Apr2026
+)
+
+!///////////////////////////////////////////////////////////////////////////////
+! Stand types
+!///////////////////////////////////////////////////////////////////////////////
+group "st_man" (
+    common_stand
+    landcover "forest"
+    naturalveg "all"
+    stinclude 1
+)
+
+!///////////////////////////////////////////////////////////////////////////////////////
+!// MMY For state initialization
+!///////////////////////////////////////////////////////////////////////////////////////
+
+st "Forest" (
+	stinclude 0
+)
+
+st "ForestST_0_10" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_10_20" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_20_30" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_30_40" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_40_50" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_50_60" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_60_70" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_70_80" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_80_90" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_90_100" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_100_110" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_110_120" (
+    st_man
+    management1 "MT1"
+)
+
+st "ForestST_120_130" (
+    st_man
+    management1 "MT1"
+
+)
+
+st "ForestST_130_140" (
+    st_man
+    management1 "MT1"
+
+)
+
+st "ForestST_140_150" (
+    st_man
+    management1 "MT1"
+)
+
+
+!
+! ============================================================
+! 6. CLIMATE DATA
+! MPI-ESM1-2-HR / SSP370
+! ============================================================
+!
+
+!
+! 6.1 Air temperature
+!
+
+param "file_temp" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_tas_global_daily_1850_2100.nc4"
+)
+
+param "variable_temp" (
+    str "tas"
+)
+
+
+!
+! 6.2 Precipitation
+!
+
+param "file_prec" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_pr_global_daily_1850_2100.nc4"
+)
+
+param "variable_prec" (
+    str "pr"
+)
+
+
+!
+! 6.3 Solar radiation
+!
+
+param "file_insol" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_rsds_global_daily_1850_2100.nc4"
+)
+
+param "variable_insol" (
+    str "rsds"
+)
+
+
+!
+! 6.4 Wind speed
+!
+
+param "file_wind" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_sfcwind_global_daily_1850_2100.nc4"
+)
+
+param "variable_wind" (
+    str "sfcwind"
+)
+
+
+!
+! 6.5 Relative humidity
+!
+
+param "file_relhum" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_hurs_global_daily_1850_2100.nc4"
+)
+
+param "variable_relhum" (
+    str "hurs"
+)
+
+!
+! 6.6 Minimum temperature
+!
+
+param "file_min_temp" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_tasmin_global_daily_1850_2100.nc4"
+)
+
+param "variable_min_temp" (
+    str "tasmin"
+)
+
+
+!
+! 6.7 Maximum temperature
+!
+
+param "file_max_temp" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_tasmax_global_daily_1850_2100.nc4"
+)
+
+param "variable_max_temp" (
+    str "tasmax"
+)
+
+param "file_pres" (str "")
+
+param "variable_pres" (str "")
+
+param "file_specifichum" (str "")
+
+param "variable_specifichum" (str "")
+
+param "file_popdens" (str "")
+
+param "variable_popdens" (str "")

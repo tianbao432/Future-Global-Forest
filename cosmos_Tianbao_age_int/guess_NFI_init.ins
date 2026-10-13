@@ -1,0 +1,320 @@
+!///////////////////////////////////////////////////////////////////////////////
+!//
+!// European simulations for evaluation againts the TMt data
+!// - LC from Moreno/Pucher forest age data
+!// - ST species selection from TMt data
+!//
+!///////////////////////////////////////////////////////////////////////////////
+
+import "./global.ins"
+import "./landcover.ins"
+
+!Climate data and co2
+import "./paths_ncep.ins"
+
+! ======== MMY new ins with custom settings ========
+import "./custom_info.ins"
+
+searchradius 5
+firsthistyear 1701
+lasthistyear 2100
+! forest_init_from_biomass 1 ! MMY@18March2026 to test state initialization
+
+! ============= MMY@20Apr2026 move to custom_info.ins =============
+param "file_gridlist" (str "./gridlist.txt")
+
+! !! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX CHOOSE WHETHER TO USE NFI DATA OR NOT HERE I XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+! ! ! Files used for simulaitons with NFI initialisation (6-9)
+! ! ================== NFI initialisation ==================
+! param "file_lu"        (str "/home/mmy/projects/lpj_group/scripts/Gitlab_Tree2Globe/nfi-initialisation/5_make_LC_ST_files/outputs/LC_NFI_NSI_sudo_minus_five_years.txt")
+! param "file_luforest"  (str "/home/mmy/projects/lpj_group/scripts/Gitlab_Tree2Globe/nfi-initialisation/5_make_LC_ST_files/outputs/ST_NFI_NSI_ST_300_sudo_minus_five_years.txt")
+
+! =================================================================
+
+!! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+!///////////////////////////////////////////////////////////////////////////////
+!!! Stochastic wood harvest input:
+!!! harvest_system "probability_input" in st/mt
+param "file_woodharv_prob_BL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/p_harvest_Broadleaf.txt")
+param "file_woodharv_prob_NL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/p_harvest_Conifer.txt")
+param "file_CC_prob_BL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/p_clearcut_Broadleaf.txt")	! These are not correct, values are up to 3000 !
+param "file_CC_prob_NL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/p_clearcut_Conifer.txt")	! These are not correct, values are up to 3000 !
+param "file_woodharv_intens_mean_BL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/intensity_mean_Broadleaf.txt")
+param "file_woodharv_intens_mean_NL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/intensity_mean_Conifer.txt")
+param "file_woodharv_intens_sd_BL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/intensity_sd_Broadleaf.txt")
+param "file_woodharv_intens_sd_NL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/intensity_sd_Conifer.txt")
+param "file_woodharv_size_preference_BL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/size_target_Broadleaf.txt")
+param "file_woodharv_size_preference_NL" (str "")! MMY@20Apr2026 (str "/home/mmy/projects/lpj_group/models/LPJ_GUESS/runs/auxiliary_data/initialization_run/NFI_init_Sweden_setup/ProbHarvinput/size_target_Conifer.txt")
+param "file_woodharv_intensity_scalar" (str "") ! MMY@16July2025 add below line, since european_applications codes updated since May 2O25 when I first time downloaded it
+
+nBA_bins 19
+BA_bin_size 5
+BA_bin_min 0
+ndiam_bins 18
+diam_bin_size 5
+diam_bin_min 0
+iflast_bin_inclusive 1
+ifthin_prob_distribution 1
+
+!///////////////////////////////////////////////////////////////////////////////
+! Prescribed disturbance input:
+param "file_dist_wind_prob" (str "") ! MMY@2July2025 add file_dist_wind_prob
+param "file_dist_clearcut" (str "")
+param "file_dist_fire" (str "")
+param "file_dist_wind" (str "")
+param "file_dist_barkbeetle" (str "")
+!disturbance_input_lastyear 2023
+!///////////////////////////////////////////////////////////////////////////////
+
+!///////////////////////////////////////////////////////////////////////////////
+!!! Stand initialisation input:
+!!! ! MMY init 2005 file_treeinit_st "...txt" in st/mt
+forest_init_poolsoil 1 ! MMY@26Apr2026 note that I change it back to 1 
+!///////////////////////////////////////////////////////////////////////////////
+
+
+!///////////////////////////////////////////////////////////////////////////////
+! Output files
+!///////////////////////////////////////////////////////////////////////////////
+file_veg_struct "file_veg_struct.out" ! MMY Vegetation structure output file, write out cohort info
+
+! file_storm "storm.out" 
+file_agpp_sts "agpp_sts.out"
+file_nsoil_sts "nsoil_sts.out"
+! file_clitter_course_sts "clitter_course_sts.out"
+! file_clitter_fine_sts "clitter_fine_sts.out"
+file_rh_sts "rh_sts.out"
+! file_rh_clitter_course_sts "rh_clitter_course_sts.out"
+! file_rh_clitter_fine_sts "rh_clitter_fine_sts.out"
+! file_luc_cflux_sts "luc_cflux_sts.out"
+! file_nlitter_sts "nlitter_sts.out"
+! file_nlitter_course_sts "nlitter_course_sts.out"
+! file_nlitter_fine_sts "nlitter_fine_sts.out"
+file_transpiration_sts "transpiration_sts.out"
+file_runoff_sts "runoff_sts.out"
+file_intercep_sts "intercep_sts.out"
+file_evap_sts "evap_sts.out"
+
+! file_diamstruct_cmass_leaf_natural "diamstruct_cmass_leaf_natural.out"
+! file_diamstruct_cmass_leaf_forest "diamstruct_cmass_leaf_forest.out"
+! file_diamstruct_cmass_wood_natural "diamstruct_cmass_wood_natural.out"
+! file_diamstruct_cmass_wood_forest "diamstruct_cmass_wood_forest.out"
+! file_diamstruct_cmass_froot_natural"diamstruct_cmass_froot_natural.out"
+! file_diamstruct_cmass_froot_forest "diamstruct_cmass_froot_forest.out"
+! file_diamstruct_cmass_wood_inc_natural "diamstruct_cmass_wood_inc_natural.out"
+! file_diamstruct_cmass_wood_inc_forest "diamstruct_cmass_wood_inc_forest.out"
+! file_diamstruct_ba_natural "diamstruct_ba_natural.out"
+! file_diamstruct_ba_forest "diamstruct_ba_forest.out"
+
+file_diamstruct_forest "diamstruct_dens_forest.out"
+
+! file_agestruct_standage_natural "agestruct_standage_natural.out"
+! file_agestruct_standage_forest "agestruct_standage_forest.out"
+! file_agestruct_standage_cropland "agestruct_standage_cropland.out"
+! file_agestruct_standage_pasture "agestruct_standage_pasture.out"
+
+file_anpp_sts "anpp_sts.out"
+file_lai_sts "lai_sts.out"
+file_cmass_sts "cmass_sts.out"
+
+! file_cmass_harv_killed_sts "cmass_harv_killed_sts.out"
+! file_cmass_dist_default_sts "cmass_dist_default_sts.out"
+! file_cmass_dist_prescribed_sts "cmass_dist_prescribed_sts.out"
+! file_cmass_dist_clearcut_killed_sts "cmass_dist_clearcut_killed_sts.out"
+! file_cmass_dist_fire_killed_sts "cmass_dist_fire_killed_sts.out"
+! file_cmass_dist_wind_killed_sts "cmass_dist_wind_killed_sts.out"
+! file_cmass_dist_barkbeetle_killed_sts "cmass_dist_barkbeetle_killed_sts.out"
+! file_cmass_dist_fire_killed_plus10cm_sts "cmass_dist_fire_killed_plus10cm_sts.out"
+! file_cmass_dist_wind_killed_plus10cm_sts "cmass_dist_wind_killed_plus10cm_sts.out"
+! file_cmass_dist_barkbeetle_killed_plus10cm_sts "cmass_dist_barkbeetle_killed_plus10cm_sts.out"
+
+file_lai_tree_sts "lai_tree_sts.out"
+file_cmass_tree_sts "cmass_tree_sts.out"
+file_cmass_tree_mort_sts "cmass_tree_mort_sts.out"
+file_cmass_wood_sts "cmass_wood_sts.out"
+file_cmass_wood_harv_killed_sts "cmass_wood_harv_killed_sts.out"
+file_cmass_wood_harv_sts "cmass_wood_harv_sts.out"
+
+file_cmass_wood_harv_toprod_sts "cmass_wood_harv_toprod_sts.out"
+file_cmass_wood_thin_sts "cmass_wood_thin_sts.out"
+file_cmass_wood_clearcut_sts "cmass_wood_clearcut_sts.out"
+file_cmass_wood_mort_sts "cmass_wood_mort_sts.out"
+file_cmass_wood_inc_sts "cmass_wood_inc_sts.out"
+
+file_csoil_sts "csoil_sts.out"
+file_clitter_sts "clitter_sts.out"
+file_csink_sts "csink_sts.out"
+file_dens_sts "dens_sts.out"
+file_height_sts "height_sts.out"
+file_diam_sts "diam_sts.out"
+file_diam_g_sts "diam_g_sts.out"
+
+file_cmass_plus10cm_sts "cmass_plus10cm_sts.out"
+file_cmass_harv_killed_plus10cm_sts "cmass_harv_killed_plus10cm_sts.out"
+
+!file_cmass_wood_plus10cm_sts "cmass_wood_plus10cm_sts.out"
+!file_cmass_wood_harv_killed_plus10cm_sts "cmass_wood_harv_killed_plus10cm_sts.out"
+!file_cmass_wood_mort_plus10cm_sts "cmass_wood_mort_plus10cm_sts.out"
+!file_cmass_wood_inc_plus10cm_sts "cmass_wood_inc_plus10cm_sts.out"
+
+!file_dens_plus10cm_sts "dens_plus10cm_sts.out"
+!file_height_plus10cm_sts "height_plus10cm_sts.out"
+!file_diam_plus10cm_sts "diam_plus10cm_sts.out"
+!file_diam_g_plus10cm_sts "diam_g_plus10cm_sts.out"
+
+file_height_sts_patch_mean "height_sts_patch_mean.out"
+file_diam_sts_patch_mean "diam_sts_patch_mean.out"
+file_diam_g_sts_patch_mean "diam_g_sts_patch_mean.out"
+
+!file_height_plus10cm_sts_patch_mean "height_plus10cm_sts_patch_mean.out"
+!file_diam_plus10cm_sts_patch_mean "diam_plus10cm_sts_patch_mean.out"
+!file_diam_g_plus10cm_sts_patch_mean "diam_g_plus10cm_sts_patch_mean.out"
+
+file_cutinterval_sts "cutinterval_sts.out"
+file_cutinterval_thisyear_sts "cutinterval_thisyear_sts.out"
+!file_nstand_sts "nstands_sts.out"
+
+file_stemloss "stemloss.out"
+file_crownloss "crownloss.out"
+file_closs "closs.out"
+
+file_stemloss_greff "stemloss_greff.out"
+file_crownloss_greff "crownloss_greff.out"
+file_closs_greff "closs_greff.out"
+
+file_stemloss_thin "stemloss_thin.out"
+file_crownloss_thin "crownloss_thin.out"
+file_closs_thin "closs_thin.out"
+
+file_stemloss_age "stemloss_age.out"
+file_crownloss_age "crownloss_age.out"
+file_closs_age "closs_age.out"
+
+file_stemloss_dist "stemloss_dist.out"
+file_crownloss_dist "crownloss_dist.out"
+file_closs_dist "closs_dist.out"
+
+file_stemloss_fire "stemloss_fire.out"
+file_crownloss_fire "crownloss_fire.out"
+file_closs_fire "closs_fire.out"
+
+file_stemloss_harv_thin "stemloss_harv_thin.out"
+file_crownloss_harv_thin "crownloss_harv_thin.out"
+file_closs_harv_thin "closs_harv_thin.out"
+
+file_stemloss_harv_ccut "stemloss_harv_ccut.out"
+file_crownloss_harv_ccut "crownloss_harv_ccut.out"
+file_closs_harv_ccut "closs_harv_ccut.out"
+file_stemloss_harv_luc "stemloss_harv_luc.out"
+file_crownloss_harv_luc "crownloss_harv_luc.out"
+file_closs_harv_luc "closs_harv_luc.out"
+
+file_stemloss_other "stemloss_other.out"
+file_crownloss_other "crownloss_other.out"
+file_closs_other "closs_other.out"
+
+file_diam_crownarea "diam_crownarea.out"
+
+file_diam_cmass_wood "diam_cmass_wood.out"
+
+file_diam_dens "diam_dens.out"
+
+!file_cmass_plus10cm "cmass_plus10cm.out"
+!file_forest_cmass_harv_killed_plus10cm "forest_cmass_harv_killed_plus10cm.out"
+! file_speciesheights_plus10cm "height_plus10cm.out"
+! file_speciesdiam_plus10cm "diam_plus10cm.out"
+! file_diamstruct_natural "diamstruct_natural.out"
+! ! file_diamstruct_forest "diamstruct_forest.out"
+! file_diamstruct_cmass_natural "diamstruct_cmass_natural.out"
+! file_diamstruct_cmass_forest "diamstruct_cmass_forest.out"
+! file_agestruct_natural "agestruct_natural.out"
+! file_agestruct_forest "agestruct_forest.out"
+file_cmass_natural "cmass_natural.out"
+file_cmass_forest "cmass_forest.out"
+
+! file_cmass_landscape "cmass_landscape.out"
+! file_anpp_landscape "anpp_landscape.out"
+
+file_dens_forest "dens_forest.out"
+file_dens_natural "dens_natural.out"
+
+file_speciesheights "height.out"
+file_speciesheights_forest "height_forest.out"
+file_speciesheights_natural "height_natural.out"
+file_speciesdiam "diam.out"
+file_speciesdiam_natural "diam_natural.out"
+file_speciesdiam_forest "diam_forest.out"
+
+file_forest_vegc "forest_vegc.out"
+file_forest_cflux_veg "forest_cflux_veg.out"
+
+file_forest_harvest "forest_harvest.out"
+!file_forest_cmass_harv_killed "forest_cmass_harv_killed.out"
+file_cpool_forest "cpool_forest.out"
+file_cpool_natural "cpool_natural.out"
+file_cflux_forest "cflux_forest.out"
+file_cflux_natural "cflux_natural.out"
+
+printseparatestands 0
+print_cmass_stand 1
+print_dens_stand 0
+print_diamstruct_stand 0
+print_diamstruct_cmass_stand 0
+print_diam_stand 0
+print_anpp_stand 0
+print_agestruct_stand 0
+printstandtypes 0
+print_cmass_pft_st 0
+print_diamstruct_cmass_st 0 ! MMY 1
+print_cmass_harv_killed_pft_st 0 ! MMY 1
+print_transpiration_pft_st 0
+print_diamstruct_cmass_leaf_st 0 ! MMY 1
+print_diamstruct_cmass_wood_st 0 ! MMY 1
+print_diamstruct_cmass_froot_st 0 ! MMY 1
+print_diamstruct_cmass_wood_inc_st 0 ! MMY 1
+print_standagestruct_st 0
+
+! MMY below added by me
+! print_diamstruct_closs_st 0
+! print_diamstruct_stemloss_st 0
+! print_diamstruct_dens_st 0
+! print_diamstruct_closs_background_st 0 
+! print_diamstruct_stemloss_background_st 0
+
+!///////////////////////////////////////////////////////////////////////////////
+! Run parameters and options
+!///////////////////////////////////////////////////////////////////////////////
+!nyear_spinup 500       ! MMY@20Apr2026 set in global.ins
+! npatch 25			    ! number of replicate patches to simulate ! MMY@20Apr2026 set in custom_info.ins
+! npatch_secondarystand 25! MMY@20Apr2026 set in custom_info.ins 
+                        ! MMY Number of replicate patches to simulate in secondary stand. Patch number in FOREST stand created from bare ground (type: int, default: 1)
+
+! ifnewalloc 1			! Whether to use the new allocation calculations (1), or the original (0) ! MMY@20Apr2026 set in custom_info.ins
+ifvolhght 1			    ! Whether to use the new tree volume to height calculations (1), or the original (0)
+ifprintallommort 1 		! Whether to print which mortality function was triggered (1) or not (0)
+!file_veg_struct "veg_struct.out"
+
+! MMY search for soil data in up to xx degrees around the EMDI coordinates
+searchradius_soil 5
+
+! MMY iftransfer_to_new_stand: Whether to create new stands in transfer_to_new_stand(). 
+!                              Required for stand cloning (type: bool, default: 0)
+!                           0: new areas of NATURAL and FOREST are represented by a new stand 
+!                              with number of patches defined in npatch_secondarystand
+!                           1: the history of the stand is transfered to the new stand (with 
+!                              different options that can be defined with a combination of 
+!                              other parameters: cutfirstyear, res_outtake, killgrass_at_cc)
+iftransfer_to_new_stand 1
+
+transfer_level 1
+
+run_landcover 1
+
+run_urban 0                 ! Whether to simulate barren land (1) or not (0)
+run_crop 0                  ! Whether to simulate crop vegetation (1) or not (0)
+run_forest 1                ! Whether to simulate managed forest (1) or not (0)
+run_pasture 0               ! Whether to simulate pasture (1) or not (0)
+run_natural 1               ! Whether to simulate natural vegetation (1) or not (0)
+run_peatland 0              ! Whether to simulate peatland (1) or not (0)
+run_barren 0                ! MMY@14Oct2025 Change to 0 since no barren from LC file. ! Whether to simulate barren land (1) or not (0)
