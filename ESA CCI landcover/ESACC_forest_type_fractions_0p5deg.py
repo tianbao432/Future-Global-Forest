@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Count ESA forest types directly from a raster on the age-table grid.
 
-Output columns: lon, lat, ND, BD, MX, UNK.
-Known cells: normalize ND/BD/MX pixel counts; UNK is zero.
-Cells without target pixels: ND=BD=MX=0 and UNK=1.
+Output columns: lon, lat, NL, BL, MIX.
+Known cells: normalize NL/BL/MIX pixel counts; zero counts remain zero.
+Cells without target pixels: set NL=0, BL=0, MIX=1; keep all reference rows.
+This is a fallback assignment, not an observed mixed-forest classification.
 Use native pixel centers, without resampling or area weighting.
+Export only the main table; validation messages are printed to the console.
 """
 
 import argparse
@@ -20,26 +22,23 @@ import rasterio
 from rasterio.crs import CRS
 from rasterio.windows import Window
 
-BASE = Path("/data/global_carbon_sink")
-DEFAULT_RASTER = BASE / (
-    "ESA_land_cover/ESA-CCI-LULC-300m-P1Y-2020-v2.1.1.tif"
-)
-DEFAULT_REFERENCE = BASE / "age_groups_0p5deg.txt"
-DEFAULT_OUTPUT = BASE / (
-    "ESA_land_cover/forest_type_fractions_0p5deg_2020.txt"
-)
+BASE = Path("/home/tianbao/run_LPJ_GUESS/ESA_CCI_PFT/")
+DEFAULT_RASTER =BASE / "ESA-CCI-LULC-300m-P1Y-2020-v2.1.1.tif"
+DEFAULT_REFERENCE = "/home/tianbao/run_LPJ_GUESS/ESA_CCI_PFT/Tianbao_age_groups_0p5deg_1700.txt"
+DEFAULT_OUTPUT = "/home/tianbao/run_LPJ_GUESS/ESA_CCI_PFT/forest_type_fractions_0p5deg_2020.txt"
+
 TYPE_CODES = {
-    "ND": (70, 71, 72, 80, 81, 82),
-    "BD": (50, 60, 61, 62),
-    "MX": (90,),
+    "NL": (70, 71, 72, 80, 81, 82),
+    "BL": (50, 60, 61, 62),
+    "MIX": (90,),
 }
-TYPE_NAMES = ["ND", "BD", "MX", "UNK"]
+TYPE_NAMES = ["NL", "BL", "MIX"]
 NROWS, NCOLS = 360, 720
 GRID_SIZE = 0.5
 COORD_TOL = 1e-8
 SCALE = 10 ** 10
 
-# Buckets: 0=invalid, 1=ND, 2=BD, 3=MX, 4=other valid classes.
+# Buckets: 0=invalid, 1=NL, 2=BL, 3=MIX, 4=other valid classes.
 NBUCKETS = 5
 LOOKUP = np.full(256, 4, dtype=np.uint8)
 LOOKUP[0] = 0
@@ -52,10 +51,6 @@ def parse_args():
     parser.add_argument("--raster", type=Path, default=DEFAULT_RASTER)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument(
-        "--write-qc", action="store_true",
-        help="Also write pixel-count QC and unknown-cell tables."
-    )
     return parser.parse_args()
 
 
@@ -202,11 +197,10 @@ def count_pixels(path, ref_rows, ref_cols):
 
 
 def fraction_units(target_counts):
-    """Return integer units summing to 10**10, including unknown cells."""
+    """Return NL/BL/MIX units; assign all-zero rows to MIX and sum to SCALE."""
     totals = target_counts.sum(axis=1)
     known = totals > 0
-    units = np.zeros((len(totals), 4), dtype=np.int64)
-    units[~known, 3] = SCALE
+    units = np.zeros((len(totals), 3), dtype=np.int64)
     if known.any():
         scaled = target_counts[known] / totals[known, None] * SCALE
         parts = np.floor(scaled).astype(np.int64)
@@ -217,9 +211,15 @@ def fraction_units(target_counts):
         for k in range(3):
             selected = np.flatnonzero(remaining > k)
             parts[selected, order[selected, k]] += 1
-        units[known, :3] = parts
+        units[known] = parts
+
+    # Fill only rows where all three target-type pixel counts are zero.
+    # Keep the original known mask for source-data diagnostics.
+    units[~known, TYPE_NAMES.index("MIX")] = SCALE
+
     if np.any(units < 0) or not np.all(units.sum(axis=1) == SCALE):
-        raise RuntimeError("Fraction sum-to-one check failed.")
+        raise RuntimeError("Fraction sum check failed: expected 1 for every row.")
+
     return units, totals, known
 
 
@@ -252,18 +252,16 @@ def main():
     args = parse_args()
     if not args.raster.is_file():
         raise FileNotFoundError(f"Raster not found: {args.raster}")
-    qc_path = args.output.with_name(args.output.stem + "_QC.txt")
-    unk_path = args.output.with_name(args.output.stem + "_UNK_cells.txt")
     inputs = {args.raster.resolve(), args.reference.resolve()}
-    destinations = [args.output] + ([qc_path, unk_path] if args.write_qc else [])
-    if any(path.resolve() in inputs for path in destinations):
+    if args.output.resolve() in inputs:
         raise ValueError("An output path would overwrite an input.")
     reference, rows, cols = load_reference(args.reference)
     print(f"Reference: {args.reference}; cells: {len(reference):,}")
     print(f"Target codes: {TYPE_CODES}")
-    print("No target pixels: ND=BD=MX=0, UNK=1.", flush=True)
+    print("No target pixels: NL=0, BL=0, MIX=1. All reference rows are retained.", flush=True)
+    print("NOTE: All-zero rows use MIX as a fallback, not an observed classification.", flush=True)
     counts, bounds = count_pixels(args.raster, rows, cols)
-    units, target_total, known = fraction_units(counts[:, 1:4])
+    units, _, known = fraction_units(counts[:, 1:4])
     output = reference.copy()
     output[TYPE_NAMES] = units / SCALE
 
@@ -281,28 +279,19 @@ def main():
     status[~known] = "NO_TARGET_FOREST_PIXELS"
     status[valid_pixels == 0] = "NO_VALID_PIXELS"
     status[all_pixels == 0] = "NO_RASTER_PIXELS"
-    if args.write_qc:
-        qc = output.copy()
-        qc[["ND_pixels", "BD_pixels", "MX_pixels"]] = counts[:, 1:4]
-        qc["target_forest_pixels"] = target_total
-        qc["other_valid_pixels"] = counts[:, 4]
-        qc["nodata_pixels"] = counts[:, 0]
-        qc["in_raster_pixels"] = all_pixels
-        qc["full_raster_extent"] = full_extent
-        qc["status"] = status
-        write_table(qc, qc_path)
-        write_table(qc.loc[~known], unk_path)
-        print(f"QC table: {qc_path}")
-        print(f"Unknown-cell table: {unk_path}")
+
     write_table(output, args.output, expected_units=units)
+
     print(f"Known type cells: {int(known.sum()):,}")
-    print(f"UNK=1 cells: {int((~known).sum()):,}")
+    print(f"All-zero type cells assigned to MIX: {int((~known).sum()):,}")
     print(pd.Series(status).value_counts().to_string())
     if (~full_extent).any():
-        print("WARNING: Some cells lack full raster coverage; review --write-qc outputs.")
+        print("WARNING: Some cells lack full raster coverage.")
     print(f"SUCCESS: {args.output}")
     print("PASS: coordinates and row order match the age table.")
-    print("PASS: ND + BD + MX + UNK = 1 at 10 decimal places; no NaN values.")
+    print("PASS: NL + BL + MIX = 1 for every output cell.")
+    print("PASS: Cells without target forest pixels use NL=0, BL=0, MIX=1.")
+    print("PASS: fractions validated at 10 decimal places; no NaN values.")
     print(output.head(10).to_string(index=False))
 
 
