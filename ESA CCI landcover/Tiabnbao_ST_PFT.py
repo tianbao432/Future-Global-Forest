@@ -1,221 +1,270 @@
 #!/usr/bin/env python3
-"""Build one annual forest-type table from two input files."""
+"""Generate consistent 1700-2100 land-cover and 15-ForestST inputs.
 
+Original forest-age probability classes are evaluated BEFORE merging classes
+whose lower age bound is 140 years or older. This preserves historical
+establishment information when the input has 33 ten-year age classes.
+
+The final ForestST_140_150 is an OPEN-ENDED class representing ages >=140
+in the 2020 reference distribution. For 2021-2100, stand area fractions
+remain fixed at their 2020 values; the code does not simulate tree growth.
+"""
+
+import argparse
 import os
-import sys
-import time
+import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-TYPE_FILE = Path('/data/global_carbon_sink/ESA_land_cover/forest_type_fractions_0p5deg_2020.txt')
-ST_FILE = Path('/data/global_carbon_sink/LC/ForestST_agegroups_1700_2100_15.txt')
-OUTPUT_FILE = Path('/data/global_carbon_sink/ESA_land_cover/PFT/Tianbao_ST_PFT_1700_2100.txt')
+START_YEAR = 1700
+REFERENCE_YEAR = 2020
+END_YEAR = 2100
+AGE_STEP = 10
+CHUNK_GRIDS = 100
+DEFAULT_MODE =  "both"
 
-TYPE_COLS = ['ND', 'BD', 'MX', 'UNK']
-ST_COLS = [f'ForestST_{i}_{i + 10}' for i in range(0, 150, 10)]
-START_YEAR, END_YEAR = 1700, 2100
-NYEARS = END_YEAR - START_YEAR + 1
-CHUNK_ROWS = 100000
-TOL = 1e-8
-SCALE = 10 ** 10
+DEFAULT_INPUT = Path("/home/tianbao/run_LPJ_GUESS/ESA_CCI_PFT/Tianbao_age_groups_0p5deg_1700.txt")
+DEFAULT_OUTPUT_DIR = Path("/home/tianbao/run_LPJ_GUESS/ESA_CCI_PFT/data")
+LC_FILENAME = "Tianbao_forest_landcover_1700_2100_15groups.txt"
+ST_FILENAME = "Tianbao_ForestST_agegroups_1700_2100_15.txt"
+SUMMARY_FILENAME = "forest_landcover_1700_2100_15groups_summary.txt"
 
-
-def column_mapping(path, required, optional=()):
-    if not path.is_file():
-        raise FileNotFoundError(f'Input not found: {path}')
-    with path.open(encoding='utf-8-sig') as handle:
-        names = next((line.split() for line in handle if line.strip()), [])
-    lookup = {name.lower(): name for name in names}
-    if len(lookup) != len(names):
-        raise ValueError(f'Duplicate column names: {path}')
-    missing = [name for name in required if name.lower() not in lookup]
-    if missing:
-        raise ValueError(f'Missing columns in {path}: {missing}')
-    if ST_COLS[0] in required:
-        actual = {name for name in lookup if name.startswith('forestst_')}
-        if actual != {name.lower() for name in ST_COLS}:
-            raise ValueError('Expected exactly 15 ForestST columns: 0_10 through 140_150.')
-    selected = list(required) + [name for name in optional if name.lower() in lookup]
-    return {lookup[name.lower()]: name for name in selected}
+OUTPUT_ST_COLUMNS = [
+    f"ForestST_{i}_{i + AGE_STEP}" for i in range(0, 150, AGE_STEP)
+]
 
 
-def grid_ids(frame):
-    lon = frame['lon'].to_numpy()
-    lat = frame['lat'].to_numpy()
-    if not (np.isfinite(lon).all() and np.isfinite(lat).all()):
-        raise ValueError('Coordinates contain missing or infinite values.')
-    if np.any((lon < -180) | (lon > 180) | (lat < -90) | (lat > 90)):
-        raise ValueError('Coordinates are outside geographic bounds.')
-    cols = np.rint((lon + 179.75) / 0.5).astype(np.int64)
-    rows = np.rint((89.75 - lat) / 0.5).astype(np.int64)
-    valid = (
-        (cols >= 0) & (cols < 720) & (rows >= 0) & (rows < 360)
-        & (np.abs(lon - (-179.75 + cols * 0.5)) <= TOL)
-        & (np.abs(lat - (89.75 - rows * 0.5)) <= TOL)
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--chunk-grids", type=int, default=CHUNK_GRIDS)
+    parser.add_argument(
+        "--mode", choices=("both", "landcover", "forestst"), default=DEFAULT_MODE
     )
-    if not valid.all():
-        raise ValueError('Coordinates must be 0.5-degree grid centers ending in .25 or .75.')
-    return rows * 720 + cols
+    return parser.parse_args()
 
 
-def load_types():
-    mapping = column_mapping(TYPE_FILE, ['lon', 'lat', 'ND', 'BD', 'MX'], ['UNK', 'year'])
-    frame = pd.read_csv(
-        TYPE_FILE, sep=r'\s+', usecols=list(mapping), dtype=np.float64,
-        encoding='utf-8-sig').rename(columns=mapping)
-    if frame.empty:
-        raise ValueError('The type table is empty.')
-    if 'year' in frame and not (frame['year'] == 2020).all():
-        raise ValueError('The static type table must contain only year 2020.')
-    ids = grid_ids(frame)
-    if len(np.unique(ids)) != len(ids):
-        raise ValueError('Duplicate coordinates in the type table.')
+def determine_age_columns(columns):
+    pattern = re.compile(r"^age_(\d+)_(\d+)$")
+    groups = []
+    for column in columns:
+        match = pattern.fullmatch(str(column))
+        if match:
+            lower, upper = map(int, match.groups())
+            if upper - lower != AGE_STEP:
+                raise ValueError(f"Unexpected age-group interval: {column}")
+            groups.append((lower, column))
+    groups.sort()
+    if not groups:
+        raise ValueError("No age_*_* probability columns found.")
 
-    if 'UNK' in frame:
-        weights = frame[TYPE_COLS].to_numpy(copy=True)
-        if not np.isfinite(weights).all():
-            raise ValueError('Explicit ND/BD/MX/UNK weights must all be finite.')
-    else:
-        values = frame[['ND', 'BD', 'MX']].to_numpy()
-        finite = np.isfinite(values).all(axis=1)
-        all_nan = np.isnan(values).all(axis=1)
-        all_zero = finite & (values == 0).all(axis=1)
-        if not (finite | all_nan).all():
-            raise ValueError('Partial missing values or infinities in ND/BD/MX.')
-        unknown = all_nan | all_zero
-        weights = np.zeros((len(frame), 4), dtype=np.float64)
-        weights[~unknown, :3] = values[~unknown]
-        weights[unknown, 3] = 1.0
-        print(f'Converted to UNK: all-NaN={all_nan.sum():,}, all-zero={all_zero.sum():,}')
+    lower_bounds = [lower for lower, _ in groups]
+    if lower_bounds != list(range(0, lower_bounds[-1] + AGE_STEP, AGE_STEP)):
+        raise ValueError("Age-group columns must be contiguous from 0 in steps of 10.")
+    if lower_bounds[-1] < 140:
+        raise ValueError("The input must contain at least age_140_150.")
+    if len(set(lower_bounds)) != len(groups):
+        raise ValueError("Duplicate age-group lower bounds detected.")
 
-    sums = weights.sum(axis=1)
-    invalid = ((weights < 0).any(axis=1) | (weights > 1).any(axis=1)
-               | (np.abs(sums - 1) > TOL))
-    if invalid.any():
-        raise ValueError('Type weights must be in [0, 1] and sum to 1.\n'
-                         + frame.loc[invalid].head().to_string(index=False))
-    weights /= sums[:, None]
-    return frame[['lon', 'lat']].copy(), ids, weights
+    return [column for _, column in groups], np.array(lower_bounds, dtype=int)
 
 
-def split_forest(forest_units, weights):
-    """Preserve the four-type total exactly at 10 decimal places."""
-    scaled = forest_units[:, None] * weights
-    parts = np.floor(scaled).astype(np.int64)
-    remainder = forest_units - parts.sum(axis=1)
-    if np.any((remainder < 0) | (remainder > 4)):
-        raise RuntimeError('Unexpected rounding remainder.')
-    order = np.argsort(-(scaled - parts), axis=1, kind='stable')
-    for k in range(4):
-        rows = np.flatnonzero(remainder > k)
-        parts[rows, order[rows, k]] += 1
-    if np.any(parts < 0) or not np.array_equal(parts.sum(axis=1), forest_units):
-        raise RuntimeError('ND+BD+MX+UNK does not equal FOREST.')
-    if np.any((weights == 0) & (parts > 0)) or np.any(np.abs(parts - scaled) > 1.00001):
-        raise RuntimeError('A type allocation is inconsistent with its input weight.')
-    return parts
+def read_age_table(input_path):
+    if not input_path.is_file():
+        raise FileNotFoundError(f"Age-distribution file not found: {input_path}")
+
+    df = pd.read_csv(input_path, sep=r"\s+")
+    age_columns, lower_bounds = determine_age_columns(df.columns)
+    for column in ["lon", "lat"] + age_columns:
+        if column not in df.columns:
+            raise ValueError(f"Missing required column: {column}")
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    coords = df[["lon", "lat"]].to_numpy(dtype=np.float64)
+    if not np.isfinite(coords).all():
+        raise ValueError("Non-finite longitude or latitude detected.")
+    if ((coords[:, 0] < -180) | (coords[:, 0] > 180)).any():
+        raise ValueError("Longitude outside [-180, 180] detected.")
+    if ((coords[:, 1] < -90) | (coords[:, 1] > 90)).any():
+        raise ValueError("Latitude outside [-90, 90] detected.")
+    if df.duplicated(["lon", "lat"]).any():
+        raise ValueError("Duplicate coordinate pairs detected.")
+
+    probs = df[age_columns].to_numpy(dtype=np.float64)
+    if not np.isfinite(probs).all():
+        raise ValueError("Non-finite age probabilities detected.")
+    if np.any(probs < -1e-10) or np.any(probs > 1.0 + 1e-10):
+        raise ValueError("Age probabilities must lie within [0, 1].")
+    probs = np.clip(probs, 0.0, 1.0)
+    sums = probs.sum(axis=1)
+    if not np.allclose(sums, 1.0, atol=1e-6, rtol=0):
+        bad = np.flatnonzero(~np.isclose(sums, 1.0, atol=1e-6, rtol=0))
+        raise ValueError(
+            f"Age probabilities fail sum-to-one QC in {len(bad)} cells; "
+            f"first index={bad[0]}, sum={sums[bad[0]]:.10f}"
+        )
+    probs /= sums[:, None]
+
+    print(f"Input age table: {input_path}")
+    print(f"Forest grid cells: {len(df):,}")
+    print(f"Original age groups: {len(age_columns)}")
+    print(f"Original oldest class: {age_columns[-1]} (open ended)")
+    if len(age_columns) == 15:
+        print(
+            "WARNING: Input has only 15 age groups. Exact age structure above "
+            "140 years is lost; forest fractions before 1880 will be zero "
+            "under the lower-bound backcasting rule."
+        )
+    elif lower_bounds[-1] < REFERENCE_YEAR - START_YEAR:
+        print(
+            "WARNING: Input oldest age-group lower bound is younger than "
+            "the 320-year historical lookback. Early years may be forced to zero."
+        )
+    return coords, probs, lower_bounds
+
+
+def make_output_chunk(coords, probs, years, inclusion, mode):
+    n_cells = coords.shape[0]
+    n_years = years.size
+    selected = probs @ inclusion.T
+    selected = np.clip(selected, 0.0, 1.0)
+
+    if not np.all(np.diff(selected[:, : REFERENCE_YEAR - START_YEAR + 1], axis=1) >= -1e-10):
+        raise ValueError("Historical FOREST fraction decreases over time.")
+    if not np.allclose(selected[:, REFERENCE_YEAR - START_YEAR], 1.0, atol=1e-8):
+        raise ValueError("FOREST fraction in the reference year is not 1.")
+    if not np.allclose(selected[:, REFERENCE_YEAR - START_YEAR :], 1.0, atol=1e-8):
+        raise ValueError("Future FOREST fractions are not fixed to 2020.")
+
+    lon = np.repeat(coords[:, 0], n_years)
+    lat = np.repeat(coords[:, 1], n_years)
+    year = np.tile(years, n_cells)
+
+    lc = None
+    st = None
+    if mode in ("both", "landcover"):
+        lc = pd.DataFrame({
+            "Lon": lon,
+            "Lat": lat,
+            "Year": year,
+            "NATURAL": (1.0 - selected).ravel(),
+            "FOREST": selected.ravel(),
+        })
+
+    if mode in ("both", "forestst"):
+        # A stand holds the reference-year age cohort, not current-year tree age.
+        cube = np.empty((n_cells, n_years, 15), dtype=np.float64)
+        cube[:, :, :14] = (
+            probs[:, None, :14] * inclusion[None, :, :14]
+        )
+        # Apply historical presence first; then merge ALL ages >= 140.
+        cube[:, :, 14] = probs[:, 14:] @ inclusion[:, 14:].T
+        cube = np.clip(cube, 0.0, 1.0)
+        stand_sum = cube.sum(axis=2)
+        if not np.allclose(stand_sum, selected, atol=1e-8, rtol=0):
+            difference = np.max(np.abs(stand_sum - selected))
+            raise ValueError(f"ForestST and FOREST totals disagree: {difference}")
+        if not np.allclose(
+            cube[:, REFERENCE_YEAR - START_YEAR :],
+            cube[:, REFERENCE_YEAR - START_YEAR, None, :],
+            atol=1e-8, rtol=0,
+        ):
+            raise ValueError("Future stand fractions must remain at 2020 values.")
+
+        st = pd.DataFrame(
+            cube.reshape(n_cells * n_years, 15), columns=OUTPUT_ST_COLUMNS
+        )
+        st.insert(0, "year", year)
+        st.insert(0, "lat", lat)
+        st.insert(0, "lon", lon)
+
+    return lc, st, selected.sum(axis=0)
 
 
 def main():
-    if OUTPUT_FILE.resolve() in {TYPE_FILE.resolve(), ST_FILE.resolve()}:
-        raise ValueError('The output must not overwrite an input file.')
-    coords, ids, weights = load_types()
-    mapping = column_mapping(ST_FILE, ['lon', 'lat', 'year'] + ST_COLS)
-    ngrid = len(coords)
-    lookup = np.full(720 * 360, -1, dtype=np.int64)
-    lookup[ids] = np.arange(ngrid)
-    seen = np.zeros((ngrid, (NYEARS + 7) // 8), dtype=np.uint8)
-    counts = np.zeros(ngrid, dtype=np.int64)
-    positive_rows = np.zeros(4, dtype=np.int64)
-    total = 0
+    args = parse_args()
+    if args.chunk_grids < 1:
+        raise ValueError("--chunk-grids must be positive.")
+    if not (START_YEAR <= REFERENCE_YEAR <= END_YEAR):
+        raise ValueError("Invalid model years.")
 
-    print(f'Type input: {TYPE_FILE}')
-    print(f'ForestST input: {ST_FILE}')
-    print(f'Output: {OUTPUT_FILE}')
-    print(f'Grid count: {ngrid:,}; expected annual rows: {ngrid * NYEARS:,}')
-    print('Input grids with positive weights: ' + ', '.join(
-        f'{name}={(weights[:, j] > 0).sum():,}' for j, name in enumerate(TYPE_COLS)), flush=True)
+    coords, probs, lower_bounds = read_age_table(args.input)
+    years = np.arange(START_YEAR, END_YEAR + 1, dtype=int)
+    thresholds = REFERENCE_YEAR - years
+    inclusion = (lower_bounds[None, :] >= thresholds[:, None]).astype(float)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temp = OUTPUT_FILE.with_name(OUTPUT_FILE.name + f'.partial.{os.getpid()}')
-    last_report = time.monotonic()
+    outputs = {}
+    if args.mode in ("both", "landcover"):
+        outputs["landcover"] = args.output_dir / LC_FILENAME
+    if args.mode in ("both", "forestst"):
+        outputs["forestst"] = args.output_dir / ST_FILENAME
+
+    temps = {key: Path(str(path) + f".partial.{os.getpid()}") for key, path in outputs.items()}
+    total_rows = 0
+    yearly_sum = np.zeros(years.size, dtype=np.float64)
+    print(f"Output mode: {args.mode}")
+    print(f"Year range: {START_YEAR}-{END_YEAR}, inclusive ({len(years)} years)")
+    print(f"Output ForestST groups: {len(OUTPUT_ST_COLUMNS)} (last represents >=140)")
+    for kind, path in outputs.items():
+        print(f"{kind}: {path}")
+
     try:
-        with temp.open('w', encoding='utf-8', newline='') as handle:
-            with pd.read_csv(
-                ST_FILE, sep=r'\s+', usecols=list(mapping), dtype=np.float64,
-                encoding='utf-8-sig', chunksize=CHUNK_ROWS
-            ) as reader:
-                for chunk in reader:
-                    if chunk.empty:
-                        continue
-                    chunk = chunk.rename(columns=mapping)
-                    idx = lookup[grid_ids(chunk)]
-                    if (idx < 0).any():
-                        raise ValueError('ForestST coordinates are missing from the type table.\n'
-                                         + chunk.loc[idx < 0, ['lon', 'lat']].head().to_string(index=False))
+        for start in range(0, len(coords), args.chunk_grids):
+            stop = min(start + args.chunk_grids, len(coords))
+            lc_chunk, st_chunk, sums = make_output_chunk(
+                coords[start:stop], probs[start:stop], years, inclusion, args.mode
+            )
+            yearly_sum += sums
+            for kind, frame in (("landcover", lc_chunk), ("forestst", st_chunk)):
+                if frame is None:
+                    continue
+                frame.to_csv(
+                    temps[kind],
+                    sep="\t", index=False, float_format="%.10f",
+                    header=(start == 0), mode=("w" if start == 0 else "a"),
+                )
+            total_rows += (stop - start) * len(years)
+            if stop == len(coords) or start == 0 or stop % 1000 == 0:
+                print(f"Processed {stop:,}/{len(coords):,} grid cells", flush=True)
 
-                    y = chunk['year'].to_numpy()
-                    if not np.isfinite(y).all() or np.any(
-                        (y < START_YEAR) | (y > END_YEAR) | (y != np.rint(y))
-                    ):
-                        raise ValueError('Years must be integers from 1700 through 2100.')
-                    years = y.astype(np.int64)
-                    offsets = years - START_YEAR
-                    keys = idx * NYEARS + offsets
-                    byte = offsets // 8
-                    bits = np.left_shift(np.uint8(1), (offsets % 8).astype(np.uint8))
-                    if len(np.unique(keys)) != len(keys) or np.any((seen[idx, byte] & bits) != 0):
-                        raise ValueError('Duplicate coordinate/year records in ForestST.')
-                    np.bitwise_or.at(seen, (idx, byte), bits)
-                    counts += np.bincount(idx, minlength=ngrid)
+        expected_rows = len(coords) * len(years)
+        if total_rows != expected_rows:
+            raise RuntimeError("Output record-count QC failed.")
+        for kind, path in outputs.items():
+            if not temps[kind].is_file() or temps[kind].stat().st_size == 0:
+                raise RuntimeError(f"Empty output for {kind}")
+        for kind, path in outputs.items():
+            os.replace(temps[kind], path)
 
-                    stands = chunk[ST_COLS].to_numpy()
-                    if not np.isfinite(stands).all() or np.any((stands < 0) | (stands > 1)):
-                        raise ValueError('ForestST fractions must be finite and in [0, 1].')
-                    forest = stands.sum(axis=1)
-                    if np.any(forest > 1 + TOL):
-                        raise ValueError('The sum of the 15 ForestST fractions exceeds 1.')
-                    forest_units = np.rint(np.clip(forest, 0, 1) * SCALE).astype(np.int64)
-                    natural_units = SCALE - forest_units
-                    parts = split_forest(forest_units, weights[idx])
-                    positive_rows += (parts > 0).sum(axis=0)
+        if args.mode in ("both", "landcover"):
+            summary = pd.DataFrame({
+                "Year": years,
+                "Historical_Age": thresholds,
+                "Mean_FOREST": yearly_sum / len(coords),
+                "Mean_NATURAL": 1.0 - yearly_sum / len(coords),
+            })
+            summary.to_csv(
+                args.output_dir / SUMMARY_FILENAME,
+                sep="\t", index=False, float_format="%.10f"
+            )
 
-                    out = pd.DataFrame({
-                        'lon': chunk['lon'].to_numpy(), 'lat': chunk['lat'].to_numpy(),
-                        'year': years, 'FOREST': forest_units / SCALE,
-                        'NATURAL': natural_units / SCALE})
-                    for j, name in enumerate(TYPE_COLS):
-                        out[name] = parts[:, j] / SCALE
-                    out.to_csv(handle, sep='\t', index=False, header=(total == 0), float_format='%.10f')
-                    total += len(out)
-                    if time.monotonic() - last_report >= 10:
-                        print(f'Processed {total:,} / {ngrid * NYEARS:,} rows.', flush=True)
-                        last_report = time.monotonic()
-
-        incomplete = counts != NYEARS
-        if incomplete.any():
-            example = coords.loc[incomplete].copy()
-            example['annual_rows'] = counts[incomplete]
-            raise ValueError('Each type-table grid must have all 401 years in ForestST.\n'
-                             + example.head().to_string(index=False))
-        if total != ngrid * NYEARS:
-            raise RuntimeError('Unexpected output row count.')
-        os.replace(temp, OUTPUT_FILE)
+        print(f"PASS: {total_rows:,} data rows per time-series output")
+        print("PASS: all age-probability and land-cover consistency checks")
+        print("Years: 1700, 1800, 1880, 2020, 2050, 2100")
+        first_lc, first_st, _ = make_output_chunk(
+            coords[:1], probs[:1], years, inclusion, "both"
+        )
+        first_lc = first_lc[first_lc["Year"].isin([1700, 1800, 1880, 2020, 2050, 2100])]
+        print(first_lc.to_string(index=False))
     finally:
-        if temp.exists():
-            temp.unlink()
-
-    print('Output rows with positive values: ' + ', '.join(
-        f'{name}={positive_rows[j]:,}' for j, name in enumerate(TYPE_COLS)))
-    print('PASS: ND+BD+MX+UNK=FOREST; FOREST+NATURAL=1 at 10 decimal places.')
-    print(f'SUCCESS: {OUTPUT_FILE}', flush=True)
+        for temporary in temps.values():
+            if temporary.exists():
+                temporary.unlink()
 
 
-if __name__ == '__main__':
-    try:
-        main()
-    except Exception as exc:
-        print(f'ERROR: {exc}', file=sys.stderr, flush=True)
-        sys.exit(1)
+if __name__ == "__main__":
+    main()
