@@ -1,0 +1,328 @@
+!
+! ============================================================
+! LPJ-GUESS GLOBAL REFERENCE EXPERIMENT
+!
+! Climate: MPI-ESM1-2-HR / SSP370
+! Gridcells: 15
+! Spinup: 500 years
+! Simulation period: 1701-2100
+!
+! Reference definition:
+! - No age-derived land-cover history
+! - No prescribed forest-age initialization
+! - run_landcover = 0
+! - Vegetation structure develops internally in LPJ-GUESS
+! ============================================================
+!
+
+import "/home/tianbao/run_LPJ_GUESS/Ref/configs/global.ins"
+
+
+!
+! ============================================================
+! 1. BASIC SIMULATION SETTINGS
+! ============================================================
+!
+
+title "Global SSP370 Reference - 15 Gridcells"
+
+outputdirectory "/home/tianbao/run_LPJ_GUESS/Ref/output/"
+
+vegmode "cohort"
+
+nyear_spinup 500
+
+firsthistyear 1701
+lasthistyear 2100
+
+
+!
+! No prescribed land-cover history.
+! No age-derived file_lu or file_luforest is used.
+!
+
+run_landcover 0
+
+
+!
+! ============================================================
+! 2. GRIDLIST
+! ============================================================
+!
+
+param "file_gridlist" (
+    str "/home/tianbao/run_LPJ_GUESS/Ref/input/gridlist.txt"
+)
+
+
+!
+! ============================================================
+! 3. ATMOSPHERIC CO2
+! ============================================================
+!
+
+param "file_co2" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/co2/co2_histssp370_annual_1850_2100.txt"
+)
+
+
+!
+! ============================================================
+! 4. NITROGEN DEPOSITION
+! ============================================================
+!
+
+param "file_ndep" (
+    str ""
+)
+
+param "fixed_ndep" (
+    num 0
+)
+
+param "file_mNHxdrydep" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/n-deposition/histsoc-ssp370soc-wetdry-lpjguess/ndep_drynhx_histsoc_ssp370_monthly_1850_2100_lpjg.nc4"
+)
+
+param "variable_mNHxdrydep" (
+    str "drynhx"
+)
+
+param "file_mNOydrydep" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/n-deposition/histsoc-ssp370soc-wetdry-lpjguess/ndep_drynoy_histsoc_ssp370_monthly_1850_2100_lpjg.nc4"
+)
+
+param "variable_mNOydrydep" (
+    str "drynoy"
+)
+
+param "file_mNHxwetdep" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/n-deposition/histsoc-ssp370soc-wetdry-lpjguess/ndep_wetnhx_histsoc_ssp370_monthly_1850_2100_lpjg.nc4"
+)
+
+param "variable_mNHxwetdep" (
+    str "wetnhx"
+)
+
+param "file_mNOywetdep" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/n-deposition/histsoc-ssp370soc-wetdry-lpjguess/ndep_wetnoy_histsoc_ssp370_monthly_1850_2100_lpjg.nc4"
+)
+
+param "variable_mNOywetdep" (
+    str "wetnoy"
+)
+
+
+!
+! ============================================================
+! 5. SOIL DATA
+! ============================================================
+!
+
+param "file_soildata" (
+    str "/home/tianbao/LPJ-GUESS-european_applications/LPJ-GUESS-european_applications/data/env/soils_lpj.dat"
+)
+
+
+!
+! ============================================================
+! 6. CLIMATE DATA
+! MPI-ESM1-2-HR / SSP370
+! ============================================================
+!
+
+
+!
+! 6.1 Air temperature
+!
+
+param "file_temp" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_tas_global_daily_1850_2100.nc4"
+)
+
+param "variable_temp" (
+    str "tas"
+)
+
+
+!
+! 6.2 Precipitation
+!
+
+param "file_prec" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_pr_global_daily_1850_2100.nc4"
+)
+
+param "variable_prec" (
+    str "pr"
+)
+
+
+!
+! 6.3 Solar radiation
+!
+
+param "file_insol" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_rsds_global_daily_1850_2100.nc4"
+)
+
+param "variable_insol" (
+    str "rsds"
+)
+
+
+!
+! 6.4 Wind speed
+!
+
+param "file_wind" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_sfcwind_global_daily_1850_2100.nc4"
+)
+
+param "variable_wind" (
+    str "sfcwind"
+)
+
+
+!
+! 6.5 Relative humidity
+!
+
+param "file_relhum" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_hurs_global_daily_1850_2100.nc4"
+)
+
+param "variable_relhum" (
+    str "hurs"
+)
+
+
+!
+! 6.6 Minimum temperature
+!
+
+param "file_min_temp" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_tasmin_global_daily_1850_2100.nc4"
+)
+
+param "variable_min_temp" (
+    str "tasmin"
+)
+
+
+!
+! 6.7 Maximum temperature
+!
+
+param "file_max_temp" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/climate_land_only_v2/climate3b/ssp370/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_ssp370_tasmax_global_daily_1850_2100.nc4"
+)
+
+param "variable_max_temp" (
+    str "tasmax"
+)
+
+
+!
+! 6.8 Optional climate variables
+!
+
+param "file_pres" (
+    str ""
+)
+
+param "variable_pres" (
+    str ""
+)
+
+param "file_specifichum" (
+    str ""
+)
+
+param "variable_specifichum" (
+    str ""
+)
+
+param "file_wetdays" (
+    str ""
+)
+
+param "variable_wetdays" (
+    str ""
+)
+
+
+!
+! ============================================================
+! 7. GRIDCELL MATCHING
+! ============================================================
+!
+
+param "searchradius" (
+    num 5
+)
+searchradius_soil 5
+
+!
+! ============================================================
+! 8. DISTURBANCE AND FIRE
+! ============================================================
+!
+
+ifdisturb 1
+
+firemodel "BLAZE"
+
+param "file_simfire" (
+    str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/fire/simfireinput_2019/SimfireInput.bin"
+)
+
+!
+! ============================================================
+! 9. STRUCTURE OUTPUTS
+! ============================================================
+!
+
+file_speciesdiam "speciesdiam.out"
+
+file_dens_sts "dens_sts.out"
+
+file_diam_sts "diam_sts.out"
+
+file_cmass_tree_sts "cmass_tree_sts.out"
+
+file_cmass_tree_mort_sts "cmass_tree_mort_sts.out"
+
+file_cmass_harv_killed_sts "cmass_harv_killed_sts.out"
+
+
+!
+! Natural-land-cover structure outputs.
+! These are preferred for comparison because run_landcover = 0.
+!
+
+file_dens_natural "dens_natural.out"
+
+file_speciesdiam_natural "diam_natural.out"
+
+file_speciesheights_natural "height_natural.out"
+
+file_cmass_natural "cmass_natural.out"
+
+
+!
+! ============================================================
+! 10. STAND AGE OUTPUT
+! ============================================================
+!
+
+file_agestruct_standage_natural "agestruct_standage_natural.out"
+
+print_agestruct_stand 1
+
+
+!
+! ============================================================
+! END
+! ============================================================
+!
